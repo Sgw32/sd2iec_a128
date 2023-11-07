@@ -1124,7 +1124,7 @@ static inline void buttons_init(void) {
   PORTB |= BUTTON_NEXT | BUTTON_PREV;
 }
 
-#elif CONFIG_HARDWARE_VARIANT == 40
+#elif CONFIG_HARDWARE_VARIANT==40
 /* ---------- Hardware configuration: pvgSD - based on uIEC ---------- */
 /* Note: This CONFIG_HARDWARE_VARIANT number is tested in system.c */
 
@@ -1165,13 +1165,13 @@ static inline uint8_t sdcard_wp(void) {
 /*** Device address selection ***/
 /* device_hw_address() returns the hardware-selected device address */
 static inline uint8_t device_hw_address(void) {
-  return 8 + !(PINA & _BV(PA4)) + 2*!(PINA & _BV(PA3));
+  return 8;// + !(PINA & _BV(PA4)) + 2*!(PINA & _BV(PA3));
 }
 
 /* Configure hardware device address pins */
 static inline void device_hw_address_init(void) {
-  DDRA  &= ~(_BV(PA3) | _BV(PA4));
-  PORTA |=   _BV(PA3) | _BV(PA4);
+  //DDRA  &= ~(_BV(PA3) | _BV(PA4));
+  //PORTA |=   _BV(PA3) | _BV(PA4);
 }
 
 static inline void leds_init(void) {
@@ -1187,20 +1187,20 @@ static inline void leds_init(void) {
 
 static inline __attribute__((always_inline)) void set_busy_led(uint8_t state) {
   if (state)
-    PORTA &= ~_BV(PA2);
-  else
     PORTA |= _BV(PA2);
+  else
+    PORTA &= ~_BV(PA2);
 }
 
 static inline __attribute__((always_inline)) void set_dirty_led(uint8_t state) {
   if (state)
-    PORTA &= ~_BV(PA1);
-  else
     PORTA |= _BV(PA1);
+  else
+    PORTA &= ~_BV(PA1);
 }
 
 static inline void toggle_dirty_led(void) {
-  PORTA ^= _BV(PA1);
+  PINA ^= _BV(PA1);
 }
 
 #ifdef HAVE_DEBUG_LED
