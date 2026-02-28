@@ -1271,6 +1271,99 @@ static inline void board_init(void) {
   PORTG = _BV(PG0) | _BV(PG1) | _BV(PG2);
 }
 
+#elif CONFIG_HARDWARE_VARIANT==41
+/* ---------- Hardware configuration: atmega328 port ---------- */
+#  define HAVE_SD
+#  define SD_CHANGE_HANDLER     ISR(INT0_vect)
+#  define SD_SUPPLY_VOLTAGE     (1L<<21)
+
+/* 250kHz slow, 2MHz fast */
+#  define SPI_DIVISOR_SLOW 32
+#  define SPI_DIVISOR_FAST 4
+
+static inline void sdcard_interface_init(void) {
+  DDRD  &= ~_BV(PD2);
+  PORTD |=  _BV(PD2);
+  DDRD  &= ~_BV(PD7);
+  PORTD |=  _BV(PD7);
+  EICRA |=  _BV(ISC00);
+  EIMSK |=  _BV(INT0);
+}
+
+static inline uint8_t sdcard_detect(void) {
+  return !(PIND & _BV(PD2));
+}
+
+static inline uint8_t sdcard_wp(void) {
+  return PIND & _BV(PD7);
+}
+
+static inline uint8_t device_hw_address(void) {
+  return 8 + !(PINC & _BV(PC2)) + 2*!(PINC & _BV(PC3));
+}
+
+static inline void device_hw_address_init(void) {
+  DDRC  &= (uint8_t)~(_BV(PC2) | _BV(PC3));
+  PORTC |= _BV(PC2) | _BV(PC3);
+}
+
+static inline void leds_init(void) {
+  DDRC |= _BV(PC0);
+  DDRC |= _BV(PC1);
+}
+
+static inline __attribute__((always_inline)) void set_busy_led(uint8_t state) {
+  if (state)
+    PORTC |= _BV(PC0);
+  else
+    PORTC &= ~_BV(PC0);
+}
+
+static inline __attribute__((always_inline)) void set_dirty_led(uint8_t state) {
+  if (state)
+    PORTC |= _BV(PC1);
+  else
+    PORTC &= ~_BV(PC1);
+}
+
+static inline void toggle_dirty_led(void) {
+  PINC |= _BV(PC1);
+}
+
+#  define IEC_INPUT             PIND
+#  define IEC_DDR               DDRD
+#  define IEC_PORT              PORTD
+#  define IEC_PIN_ATN           PD3
+#  define IEC_PIN_DATA          PD4
+#  define IEC_PIN_CLOCK         PD5
+#  define IEC_PIN_SRQ           PD6
+#  define IEC_ATN_INT_VECT      PCINT2_vect
+#  define IEC_PCMSK             PCMSK2
+
+static inline void iec_interrupts_init(void) {
+  PCICR |= _BV(PCIE2);
+  PCIFR |= _BV(PCIF2);
+}
+
+#  define BUTTON_NEXT           _BV(PB0)
+#  define BUTTON_PREV           _BV(PB1)
+
+static inline rawbutton_t buttons_read(void) {
+  return PINB & (BUTTON_NEXT | BUTTON_PREV);
+}
+
+static inline void buttons_init(void) {
+  DDRB  &= (uint8_t)~(BUTTON_NEXT | BUTTON_PREV);
+  PORTB |= BUTTON_NEXT | BUTTON_PREV;
+}
+
+#  define SOFTI2C_PORT          PORTC
+#  define SOFTI2C_PIN           PINC
+#  define SOFTI2C_DDR           DDRC
+#  define SOFTI2C_BIT_SCL       PC4
+#  define SOFTI2C_BIT_SDA       PC5
+#  define SOFTI2C_BIT_INTRQ     PC6
+#  define SOFTI2C_DELAY         6
 
 #else
 #  error "CONFIG_HARDWARE_VARIANT is unset or set to an unknown value."
