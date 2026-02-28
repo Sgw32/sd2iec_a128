@@ -1,0 +1,43 @@
+name: STM32 Blue Pill Build
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-bluepill:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi make perl
+
+      - name: Prepare build scripts
+        run: |
+          chmod +x scripts/configparser.pl scripts/gcctest.pl
+
+      - name: Build firmware (STM32F103C8T6 / Blue Pill)
+        run: |
+          make clean CONFIG=configs/config-bluepill
+          make CONFIG=configs/config-bluepill
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sd2iec-bluepill-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            obj-stm32f103c8t6-bluepill/sd2iec.elf
+            obj-stm32f103c8t6-bluepill/sd2iec.hex
+            obj-stm32f103c8t6-bluepill/sd2iec.bin
+            obj-stm32f103c8t6-bluepill/sd2iec.map
+            obj-stm32f103c8t6-bluepill/sd2iec.lss
+            obj-stm32f103c8t6-bluepill/sd2iec.sym
