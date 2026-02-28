@@ -260,40 +260,6 @@ static const PROGMEM struct fastloader_handler_s fl_handler_table[] = {
 
   { 0, FL_NONE, NULL, 0 }, // end marker
 };
-
-struct fastloader_capture_s {
-  uint8_t  loadertype;
-  uint16_t startaddr;
-  uint8_t  length;     // length - 1
-  uint8_t  buffer_id;
-};
-
-static const PROGMEM struct fastloader_capture_s fl_capture_table[] = {
-#ifdef CONFIG_LOADER_GEOS
-  { FL_GEOS_S1_64,  0x42a, 255, BUFFER_SYS_CAPTURE1 },
-  { FL_GEOS_S1_128, 0x44f, 255, BUFFER_SYS_CAPTURE1 },
-#endif
-
-  { FL_NONE, 0, 0, 0 }  // end marker
-};
-
-/* ---- Minimal drive rom emulation ---- */
-
-typedef struct magic_value_s {
-  uint16_t address;
-  uint8_t  val[2];
-} magic_value_t;
-
-/* These are address/value pairs used by some programs to detect a 1541. */
-/* Currently we remember two bytes per address since that's the longest  */
-/* block required. */
-static const PROGMEM magic_value_t c1541_magics[] = {
-  { 0xfea0, { 0x0d, 0xed } }, /* used by DreamLoad and ULoad Model 3 */
-  { 0xe5c6, { 0x34, 0xb1 } }, /* used by DreamLoad and ULoad Model 3 */
-  { 0xfffe, { 0x00, 0x00 } }, /* Disable AR6 fastloader */
-  { 0,      { 0, 0 } }        /* end mark */
-};
-
 /* System partition G-P answer */
 static const PROGMEM uint8_t system_partition_info[] = {
   0xff,0xe2,0x00,0x53,0x59,0x53,0x54,0x45,
