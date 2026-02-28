@@ -40,6 +40,23 @@
 #  undef CONFIG_COMMAND_CHANNEL_DUMP
 #endif
 
+/* Hard-limit feature set on ATmega328P to keep flash/RAM usage manageable. */
+#if defined(__AVR_ATmega328P__)
+#  undef CONFIG_REMOTE_DISPLAY
+#  undef CONFIG_LOADER_TURBODISK
+#  undef CONFIG_LOADER_DREAMLOAD
+#  undef CONFIG_LOADER_ULOAD3
+#  undef CONFIG_LOADER_GIJOE
+#  undef CONFIG_LOADER_EPYXCART
+#  undef CONFIG_LOADER_WHEELS
+#  undef CONFIG_LOADER_NIPPON
+#  undef CONFIG_LOADER_AR6
+#  undef CONFIG_LOADER_ELOAD1
+#  undef CONFIG_LOADER_MMZAK
+#  undef CONFIG_LOADER_N0SDOS
+#  undef CONFIG_LOADER_SAMSJOURNEY
+#endif
+
 /* An interrupt for detecting card changes implies hotplugging capability */
 #if defined(SD_CHANGE_HANDLER) || defined (CF_CHANGE_HANDLER)
 #  define HAVE_HOTPLUG

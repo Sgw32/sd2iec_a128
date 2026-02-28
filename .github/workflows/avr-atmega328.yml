@@ -1,0 +1,44 @@
+name: AVR atmega328 Build
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-atmega328:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install AVR toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-avr binutils-avr avr-libc make perl
+
+      - name: Prepare build scripts
+        run: |
+          chmod +x scripts/configparser.pl scripts/gcctest.pl scripts/avr/crcgen-avr.pl
+
+      - name: Build firmware (atmega328)
+        run: |
+          make clean CONFIG=configs/config-atmega328
+          make CONFIG=configs/config-atmega328
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sd2iec-atmega328-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            obj-m328p-atmega328/sd2iec.elf
+            obj-m328p-atmega328/sd2iec.hex
+            obj-m328p-atmega328/sd2iec.bin
+            obj-m328p-atmega328/sd2iec.eep
+            obj-m328p-atmega328/sd2iec.map
+            obj-m328p-atmega328/sd2iec.lss
+            obj-m328p-atmega328/sd2iec.sym
