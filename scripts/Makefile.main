@@ -55,10 +55,60 @@ SRC += eeprom-conf.c parser.c utils.c led.c diskio.c
 SRC += timer.c $(CONFIG_ARCH)/arch-timer.c $(CONFIG_ARCH)/spi.c
 SRC += $(CONFIG_ARCH)/system.c
 ifeq ($(CONFIG_HAVE_IEC),y)
-  SRC += fl-ar6.c fl-dolphin.c fl-dreamload.c fl-eload.c
-  SRC += fl-epyxcart.c fl-fc3exos.c fl-geos.c fl-gijoe.c
-  SRC += fl-mmzak.c fl-nippon.c fl-turbodisk.c fl-ulm3.c
-  SRC += fl-n0sdos.c fl-samsjourney.c
+  ifeq ($(CONFIG_MCU),atmega328p)
+    # Keep only the requested fastloaders on atmega328p.
+    ifeq ($(CONFIG_LOADER_FC3),y)
+      SRC += fl-fc3exos.c
+    endif
+    ifeq ($(CONFIG_LOADER_GEOS),y)
+      SRC += fl-geos.c
+    endif
+  else
+    ifeq ($(CONFIG_LOADER_AR6),y)
+      SRC += fl-ar6.c
+    endif
+    # Dolphin support has no config switch at the moment.
+    SRC += fl-dolphin.c
+    ifeq ($(CONFIG_LOADER_DREAMLOAD),y)
+      SRC += fl-dreamload.c
+    endif
+    ifeq ($(CONFIG_LOADER_ELOAD1),y)
+      SRC += fl-eload.c
+    endif
+    ifeq ($(CONFIG_LOADER_EPYXCART),y)
+      SRC += fl-epyxcart.c
+    endif
+    ifeq ($(CONFIG_LOADER_FC3),y)
+      SRC += fl-fc3exos.c
+    endif
+    ifeq ($(CONFIG_LOADER_GEOS),y)
+      SRC += fl-geos.c
+    endif
+    ifeq ($(CONFIG_LOADER_WHEELS),y)
+      SRC += fl-geos.c
+    endif
+    ifeq ($(CONFIG_LOADER_GIJOE),y)
+      SRC += fl-gijoe.c
+    endif
+    ifeq ($(CONFIG_LOADER_MMZAK),y)
+      SRC += fl-mmzak.c
+    endif
+    ifeq ($(CONFIG_LOADER_NIPPON),y)
+      SRC += fl-nippon.c
+    endif
+    ifeq ($(CONFIG_LOADER_TURBODISK),y)
+      SRC += fl-turbodisk.c
+    endif
+    ifeq ($(CONFIG_LOADER_ULOAD3),y)
+      SRC += fl-ulm3.c
+    endif
+    ifeq ($(CONFIG_LOADER_N0SDOS),y)
+      SRC += fl-n0sdos.c
+    endif
+    ifeq ($(CONFIG_LOADER_SAMSJOURNEY),y)
+      SRC += fl-samsjourney.c
+    endif
+  endif
 endif
 
 ifneq ($(CONFIG_NO_SD),y)
@@ -91,8 +141,10 @@ ifeq ($(CONFIG_UART_DEBUG),y)
 endif
 
 ifeq ($(CONFIG_REMOTE_DISPLAY),y)
-  SRC += display.c
-  NEED_I2C := y
+  ifneq ($(CONFIG_MCU),atmega328p)
+    SRC += display.c
+    NEED_I2C := y
+  endif
 endif
 
 ifeq ($(CONFIG_P00CACHE),y)
@@ -185,7 +237,11 @@ ifdef PRERELEASE
 PROGRAMVERSION := $(PROGRAMVERSION)$(PRERELEASE)
 endif
 
+ifeq ($(CONFIG_MCU),atmega328p)
+LONGVERSION :=
+else
 LONGVERSION := -$(CONFIGSUFFIX)
+endif
 CDEFS += -DVERSION=\"$(PROGRAMVERSION)\" -DLONGVERSION=\"$(LONGVERSION)\"
 
 
@@ -407,4 +463,3 @@ clean:
 .PHONY : all sizebefore sizeafter gccversion \
 build elf hex eep lss sym coff extcoff \
 clean clean_list program debug gdb-config doxygen
-
