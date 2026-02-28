@@ -229,31 +229,6 @@ static void createentry(cbmdirent_t *dent, buffer_t *buf, dirformat_t format) {
 /*  Callbacks                                                                */
 /* ------------------------------------------------------------------------- */
 
-/**
- * dir_footer - generate the directory footer
- * @buf: buffer to be used
- *
- * This is the final callback used during directory generation. It generates
- * the "BLOCKS FREE" message and indicates that this is the final buffer to
- * be sent. Always returns 0 for success.
- */
-static uint8_t dir_footer(buffer_t *buf) {
-  uint16_t blocks;
-
-  /* Copy the "BLOCKS FREE" message */
-  memcpy_P(buf->data, dirfooter, sizeof(dirfooter));
-
-  blocks = disk_free(buf->pvt.dir.dh.part);
-  buf->data[2] = blocks & 0xff;
-  buf->data[3] = blocks >> 8;
-
-  buf->position = 0;
-  buf->lastused = 31;
-  buf->sendeoi  = 1;
-
-  return 0;
-}
-
 /* Callback for the partition directory */
 static uint8_t pdir_refill(buffer_t* buf) {
   cbmdirent_t dent;
@@ -303,50 +278,8 @@ static uint8_t pdir_refill(buffer_t* buf) {
  * instead. Used as a callback during directory generation.
  */
 static uint8_t dir_refill(buffer_t *buf) {
-  cbmdirent_t dent;
-
-  uart_putc('+');
-
-  buf->position = 0;
-
-  if (buf->pvt.dir.counter) {
-    /* Redisplay image file as directory */
-    buf->pvt.dir.counter = 0;
-    memcpy(&dent, buf->data+256-sizeof(dent), sizeof(dent));
-    dent.typeflags = TYPE_DIR;
-    createentry(&dent, buf, buf->pvt.dir.format);
-    return 0;
-  }
-
-  switch (next_match(&buf->pvt.dir.dh,
-                     buf->pvt.dir.matchstr,
-                     buf->pvt.dir.match_start,
-                     buf->pvt.dir.match_end,
-                     buf->pvt.dir.filetype,
-                     &dent)) {
-  case 0:
-    if (image_as_dir != IMAGE_DIR_NORMAL &&
-        dent.opstype == OPSTYPE_FAT &&
-        check_imageext(dent.pvt.fat.realname) != IMG_UNKNOWN) {
-      if (image_as_dir == IMAGE_DIR_DIR) {
-        dent.typeflags = (dent.typeflags & 0xf0) | TYPE_DIR;
-      } else {
-        /* Prepare to redisplay image file as directory */
-        buf->pvt.dir.counter = 1;
-        /* Use the end of the buffer as temporary storage */
-        memcpy(buf->data+256-sizeof(dent), &dent, sizeof(dent));
-      }
-    }
-    createentry(&dent, buf, buf->pvt.dir.format);
-    return 0;
-
-  case -1:
-    return dir_footer(buf);
-
-  default:
-    free_buffer(buf);
-    return 1;
-  }
+  free_buffer(buf);
+  return 1;
 }
 
 /**

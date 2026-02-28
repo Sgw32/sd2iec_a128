@@ -29,7 +29,7 @@
 #include "config.h"
 #include "time.h"
 #include "uart.h"
-#include "rtc.h"
+// #include "rtc.h"
 #include "rtc_lpc17xx.h"
 
 #define SIGNATURE_GPREG0 0xdeadbeef

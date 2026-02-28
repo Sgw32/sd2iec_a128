@@ -36,7 +36,7 @@
 #include "ustring.h"
 #include "utils.h"
 #include "time.h"
-#include "rtc.h"
+// #include "rtc.h"
 #include "pcf8583.h"
 
 #if defined(I2C_EEPROM_ADDRESS) && I2C_EEPROM_ADDRESS == 0xa0

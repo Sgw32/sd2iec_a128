@@ -33,7 +33,7 @@
 #include "config.h"
 #include "progmem.h"
 #include "time.h"
-#include "rtc.h"
+// #include "rtc.h"
 #include "uart.h"
 #include "softrtc.h"
 

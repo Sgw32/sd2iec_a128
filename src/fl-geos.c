@@ -167,22 +167,12 @@ static void geos_transmit_status(void) {
 
 /* GEOS READ operation */
 static void geos_read_sector(uint8_t track, uint8_t sector, buffer_t *buf) {
-  uart_putc('R');
-  uart_puthex(track);
-  uart_putc('/');
-  uart_puthex(sector);
-  uart_putcrlf();
 
   read_sector(buf, current_part, track, sector);
 }
 
 /* GEOS WRITE operation */
 static void geos_write_sector_41(uint8_t track, uint8_t sector, buffer_t *buf) {
-  uart_putc('W');
-  uart_puthex(track);
-  uart_putc('/');
-  uart_puthex(sector);
-  uart_putcrlf();
 
   /* Provide "unwritten data present" feedback */
   mark_buffer_dirty(buf);
@@ -199,11 +189,6 @@ static void geos_write_sector_41(uint8_t track, uint8_t sector, buffer_t *buf) {
 
 /* GEOS WRITE_71 operation */
 static void geos_write_sector_71(uint8_t track, uint8_t sector, buffer_t *buf) {
-  uart_putc('W');
-  uart_puthex(track);
-  uart_putc('/');
-  uart_puthex(sector);
-  uart_putcrlf();
 
   /* Provide "unwritten data present" feedback */
   mark_buffer_dirty(buf);
@@ -326,8 +311,6 @@ void load_geos(UNUSED_PARAMETER) {
       break;
 
     default:
-      uart_puts_P(PSTR("unknown:\r\n"));
-      uart_trace(cmddata, 0, 4);
       return;
     }
   }
@@ -557,12 +540,6 @@ static void wheels_check_diskchange(void) {
 
 /* Wheels WRITE operation (0306) */
 static void wheels_write_sector(uint8_t track, uint8_t sector, buffer_t *buf) {
-  uart_putc('W');
-  uart_puthex(track);
-  uart_putc('/');
-  uart_puthex(sector);
-  uart_putcrlf();
-
   /* Provide "unwritten data present" feedback */
   mark_buffer_dirty(buf);
 
@@ -581,11 +558,6 @@ static void wheels_write_sector(uint8_t track, uint8_t sector, buffer_t *buf) {
 
 /* Wheels READ operation (0309) */
 static void wheels_read_sector(uint8_t track, uint8_t sector, buffer_t *buf, uint16_t bytes) {
-  uart_putc('R');
-  uart_puthex(track);
-  uart_putc('/');
-  uart_puthex(sector);
-  uart_putcrlf();
 
   read_sector(buf, current_part, track, sector);
   wheels_transmit_datablock(buf->data, bytes);

@@ -47,7 +47,7 @@
 #include "parser.h"
 #include "system.h"
 #include "time.h"
-#include "rtc.h"
+// #include "rtc.h"
 #include "uart.h"
 #include "ustring.h"
 #include "utils.h"
@@ -55,8 +55,6 @@
 #include "doscmd.h"
 
 #define CURSOR_RIGHT 0x1d
-
-static FIL romfile;
 
 /* ---- Fastloader tables ---- */
 
@@ -318,11 +316,6 @@ date_t date_match_end;
 uint16_t datacrc = 0xffff;
 static fastloaderid_t previous_loader;
 
-/* partial fastloader data capture */
-static uint16_t  capture_address, capture_remain;
-static uint8_t   capture_offset;
-static buffer_t *capture_buffer;
-
 #ifdef CONFIG_STACK_TRACKING
 //FIXME: AVR-only code
 uint16_t minstack = RAMEND;
@@ -429,15 +422,6 @@ static void save_capbuffer(void) {
 #endif // CONFIG_CAPTURE_LOADERS
 
 static void run_loader(uint16_t address) {
-  if (detected_loader == FL_NONE) {
-    uart_puts_P(PSTR("Code exec at "));
-    uart_puthex(address >> 8);
-    uart_puthex(address & 0xff);
-    uart_puts_P(PSTR(", CRC "));
-    uart_puthex(datacrc >> 8);
-    uart_puthex(datacrc & 0xff);
-    uart_putcrlf();
-  }
 
   if (detected_loader == FL_NONE)
     detected_loader = previous_loader;
@@ -602,54 +586,6 @@ static void parse_chdir(void) {
     set_changelist(NULL, NULLSTRING);
 }
 
-/* --- RD --- */
-static void parse_rmdir(void) {
-  uint8_t *str;
-  uint8_t res;
-  uint8_t part;
-  path_t  path;
-  cbmdirent_t dent,chkdent;
-  dh_t dh;
-
-  /* No deletion across subdirectories */
-  if (ustrchr(command_buffer, '/')) {
-    set_error(ERROR_SYNTAX_NONAME);
-    return;
-  }
-
-  /* Parse partition number */
-  str = command_buffer+2;
-  part = parse_partition(&str);
-  if (*str != ':') {
-    set_error(ERROR_SYNTAX_NONAME);
-  } else {
-    path.part = part;
-    path.dir  = partition[part].current_dir;
-
-    if (first_match(&path, str+1, TYPE_DIR, &dent) != 0)
-      return;
-
-    /* Check if there is anything in that directory */
-    if (chdir(&path, &dent))
-      return;
-
-    if (opendir(&dh, &path))
-      return;
-
-    if (readdir(&dh, &chkdent) != -1) {
-      if (current_error == 0)
-        set_error(ERROR_FILE_EXISTS);
-      return;
-    }
-
-    path.dir = partition[part].current_dir;
-
-    res = file_delete(&path, &dent);
-    if (res != 255)
-      set_error_ts(ERROR_SCRATCHED,res,0);
-  }
-}
-
 /* --- CD/MD/RD subparser --- */
 static void parse_dircommand(void) {
   clean_cmdbuffer();
@@ -661,10 +597,6 @@ static void parse_dircommand(void) {
 
   case 'C':
     parse_chdir();
-    break;
-
-  case 'R':
-    parse_rmdir();
     break;
 
   default:
@@ -756,280 +688,11 @@ static void parse_block(void) {
   }
 }
 
-
-/* ---------- */
-/*  C - Copy  */
-/* ---------- */
-static void parse_copy(void) {
-  path_t srcpath,dstpath;
-  uint8_t *srcname,*dstname,*tmp;
-  uint8_t savedtype;
-  int8_t res;
-  buffer_t *srcbuf,*dstbuf;
-  cbmdirent_t dent;
-
-  clean_cmdbuffer();
-
-  /* Find the = */
-  srcname = ustrchr(command_buffer,'=');
-  if (srcname == NULL) {
-    set_error(ERROR_SYNTAX_UNKNOWN);
-    return;
-  }
-  *srcname++ = 0;
-
-  /* Parse the destination name */
-  if (parse_path(command_buffer+1, &dstpath, &dstname, 0))
-    return;
-
-  if (ustrlen(dstname) == 0) {
-    set_error(ERROR_SYNTAX_NONAME);
-    return;
-  }
-
-  /* Check for invalid characters in the destination name */
-  if (check_invalid_name(dstname)) {
-    set_error(ERROR_SYNTAX_UNKNOWN);
-    return;
-  }
-
-  /* Check if the destination file exists */
-  res = first_match(&dstpath, dstname, FLAG_HIDDEN, &dent);
-  if (res == 0) {
-    set_error(ERROR_FILE_EXISTS);
-    return;
-  }
-
-  if (res > 0)
-    return;
-
-  set_error(ERROR_OK);
-
-  srcbuf = alloc_buffer();
-  dstbuf = alloc_buffer();
-  if (srcbuf == NULL || dstbuf == NULL)
-    return;
-
-  savedtype = 0;
-  srcname = ustr1tok(srcname,',',&tmp);
-  while (srcname != NULL) {
-    /* Parse the source path */
-    if (parse_path(srcname, &srcpath, &srcname, 0))
-      goto cleanup;
-
-    /* Open the current source file */
-    res = first_match(&srcpath, srcname, FLAG_HIDDEN, &dent);
-    if (res != 0)
-      goto cleanup;
-
-    /* Note: A 1541 can't copy REL files. We try to do better. */
-    if ((dent.typeflags & TYPE_MASK) == TYPE_REL) {
-      if (savedtype != 0 && savedtype != TYPE_REL) {
-        set_error(ERROR_FILE_TYPE_MISMATCH);
-        goto cleanup;
-      }
-      open_rel(&srcpath, &dent, srcbuf, 0, 1);
-    } else {
-      if (savedtype != 0 && savedtype == TYPE_REL) {
-        set_error(ERROR_FILE_TYPE_MISMATCH);
-        goto cleanup;
-      }
-      open_read(&srcpath, &dent, srcbuf);
-    }
-
-    if (current_error != 0)
-      goto cleanup;
-
-    /* Open the destination file (first source only) */
-    if (savedtype == 0) {
-      savedtype = dent.typeflags & TYPE_MASK;
-      memset(&dent, 0, sizeof(dent));
-      ustrncpy(dent.name, dstname, CBM_NAME_LENGTH);
-      if (savedtype == TYPE_REL)
-        open_rel(&dstpath, &dent, dstbuf, srcbuf->recordlen, 1);
-      else
-        open_write(&dstpath, &dent, savedtype, dstbuf, 0);
-    }
-
-    while (1) {
-      uint8_t tocopy;
-
-      if (savedtype == TYPE_REL)
-        tocopy = srcbuf->recordlen;
-      else
-        tocopy = 256-dstbuf->position;
-
-      if (tocopy > (srcbuf->lastused - srcbuf->position+1))
-        tocopy = srcbuf->lastused - srcbuf->position + 1;
-
-      if (tocopy > 256-dstbuf->position)
-        tocopy = 256-dstbuf->position;
-
-      memcpy(dstbuf->data + dstbuf->position,
-             srcbuf->data + srcbuf->position,
-             tocopy);
-      mark_buffer_dirty(dstbuf);
-      srcbuf->position += tocopy-1;  /* add 1 less, simplifies the test later */
-      dstbuf->position += tocopy;
-      dstbuf->lastused  = dstbuf->position-1;
-
-      /* End if we just copied the last data block */
-      if (srcbuf->sendeoi && srcbuf->position == srcbuf->lastused)
-        break;
-
-      /* Refill the buffers if required */
-      if (srcbuf->recordlen || srcbuf->position++ == srcbuf->lastused)
-        if (srcbuf->refill(srcbuf))
-          goto cleanup;
-
-      if (dstbuf->recordlen || dstbuf->position == 0)
-        if (dstbuf->refill(dstbuf))
-          goto cleanup;
-    }
-
-    /* Close current source file */
-    /* Free and reallocate the buffer. This is required because most of the  */
-    /* file_open code assumes that it will get a "pristine" buffer with      */
-    /* 0 is most of the fields. Allocation cannot fail at this point because */
-    /* there is at least one free buffer.                                    */
-    cleanup_and_free_buffer(srcbuf);
-    srcbuf = alloc_buffer();
-
-    /* Next file */
-    srcname = ustr1tok(NULL,',',&tmp);
-  }
-
-  cleanup:
-  /* Close the buffers */
-  srcbuf->cleanup(srcbuf);
-  cleanup_and_free_buffer(dstbuf);
-}
-
-
-/* ----------------------- */
-/*  CP - Change Partition  */
-/* ----------------------- */
-static void parse_changepart(void) {
-  uint8_t *str;
-  uint8_t part;
-
-  if (command_buffer[1] == 'P') {
-    clean_cmdbuffer();
-    str  = command_buffer + 2;
-    part = parse_partition(&str);
-  } else {
-    /* Shift-P - binary version */
-    part = command_buffer[2] - 1;
-  }
-
-  if(part>=max_part) {
-    set_error_ts(ERROR_PARTITION_ILLEGAL,part+1,0);
-    return;
-  }
-
-  current_part = part;
-  if (globalflags & AUTOSWAP_ACTIVE)
-    set_changelist(NULL, NULLSTRING);
-
-  display_current_part(current_part);
-
-  set_error_ts(ERROR_PARTITION_SELECTED, part+1, 0);
-}
-
-
 /* ------------ */
 /*  D commands  */
 /* ------------ */
 static void parse_direct(void) {
-  buffer_t *buf;
-  uint8_t drive;
-  uint32_t sector;
-  DRESULT res;
-
-  /* This also guards against attempts to use the old Duplicate command. */
-  /* Its syntax is D1=0, so buffer[2] would never have a value that is   */
-  /* a valid secondary address.                                          */
-  buf = find_buffer(command_buffer[2]);
-  if (!buf) {
-    set_error(ERROR_NO_CHANNEL);
-    return;
-  }
-
-  if (buf->pvt.buffer.size > 1) {
-    uint8_t oldsec = buf->secondary;
-    buf->secondary = BUFFER_SEC_CHAIN - oldsec;
-    buf = buf->pvt.buffer.first;
-    buf->secondary = oldsec;
-  }
-
-  buf->position = 0;
-  buf->lastused = 255;
-
-  drive = command_buffer[3];
-  sector = *((uint32_t *)(command_buffer+4));
-
-  switch (command_buffer[1]) {
-  case 'I':
-    /* Get information */
-    memset(buf->data,0,256);
-    if (disk_getinfo(drive, command_buffer[4], buf->data) != RES_OK) {
-      set_error(ERROR_DRIVE_NOT_READY);
-      return;
-    }
-    break;
-
-  case 'R':
-    /* Read sector */
-    if (buf->pvt.buffer.size < 2) { // FIXME: Assumes 512-byte sectors
-      set_error(ERROR_BUFFER_TOO_SMALL);
-      return;
-    }
-    res = disk_read(drive, buf->data, sector, 1);
-    switch (res) {
-    case RES_OK:
-      return;
-
-    case RES_ERROR:
-      set_error(ERROR_READ_NOHEADER); // Any random READ ERROR
-      return;
-
-    case RES_PARERR:
-    case RES_NOTRDY:
-    default:
-      set_error_ts(ERROR_DRIVE_NOT_READY,res,0);
-      return;
-    }
-
-  case 'W':
-    /* Write sector */
-    if (buf->pvt.buffer.size < 2) { // FIXME: Assumes 512-byte sectors
-      set_error(ERROR_BUFFER_TOO_SMALL);
-      return;
-    }
-    res = disk_write(drive, buf->data, sector, 1);
-    switch(res) {
-    case RES_OK:
-      return;
-
-    case RES_WRPRT:
-      set_error(ERROR_WRITE_PROTECT);
-      return;
-
-    case RES_ERROR:
-      set_error(ERROR_WRITE_VERIFY);
-      return;
-
-    case RES_NOTRDY:
-    case RES_PARERR:
-    default:
-      set_error_ts(ERROR_DRIVE_NOT_READY,res,0);
-      return;
-    }
-
-  default:
     set_error(ERROR_SYNTAX_UNABLE);
-    break;
-  }
 }
 
 
@@ -1138,234 +801,9 @@ static void parse_initialize(void) {
 /*  M commands  */
 /* ------------ */
 
-/* --- M-E --- */
-static void handle_memexec(void) {
-  uint16_t address;
-
-  if (command_length < 5)
-    return;
-
-  address = command_buffer[3] + (command_buffer[4]<<8);
-  run_loader(address);
-}
-
-/* --- M-R --- */
-static void handle_memread(void) {
-  FRESULT res;
-  uint16_t address, check;
-  magic_value_t *p;
-
-  if (command_length < 6)
-    return;
-
-  address = command_buffer[3] + (command_buffer[4]<<8);
-
-  if (address >= 0x8000 && rom_filename[0] != 0) {
-    /* Try to use the rom file as data source - look in the current dir first */
-    partition[current_part].fatfs.curr_dir = partition[current_part].current_dir.fat;
-    res = f_open(&partition[current_part].fatfs, &romfile, rom_filename, FA_READ | FA_OPEN_EXISTING);
-
-    if (res != FR_OK) {
-      /* Not successful, try root dir */
-      partition[current_part].fatfs.curr_dir = 0;
-      res = f_open(&partition[current_part].fatfs, &romfile, rom_filename, FA_READ | FA_OPEN_EXISTING);
-
-      if (res != FR_OK) {
-        /* Not successful, try root of drive 0 */
-        partition[0].fatfs.curr_dir = 0;
-        res = f_open(&partition[0].fatfs, &romfile, rom_filename, FA_READ | FA_OPEN_EXISTING);
-
-        if (res != FR_OK)
-          /* No file available - use internal table */
-          goto use_internal;
-      }
-    }
-
-    /* One of the f_open calls was successful */
-    address -= 0x8000;
-    if (romfile.fsize < 32*1024U)
-      /* Allow 16K 1541 roms */
-      address &= 0x3fff;
-
-    if ((romfile.fsize & 0x3fff) != 0)
-      /* Skip header bytes */
-      address += romfile.fsize & 0x3fff;
-
-    res = f_lseek(&romfile, address);
-    if (res != FR_OK)
-      goto use_internal;
-
-    /* Clamp maximum read length to buffer size */
-    uint8_t bytes = command_buffer[5];
-    if (bytes > sizeof(error_buffer))
-      bytes = sizeof(error_buffer);
-
-    UINT bytesread;
-    res = f_read(&romfile, error_buffer, bytes, &bytesread);
-    if (res != FR_OK || bytesread != bytes)
-      goto use_internal;
-
-    /* Note: f_close isn't neccessary in FatFs for read-only files */
-
-  } else {
-  use_internal:
-    /* Check some special addresses used for drive detection. */
-    p = (magic_value_t*) c1541_magics;
-    while ( (check = pgm_read_word(&p->address)) ) {
-      if (check == address) {
-        error_buffer[0] = pgm_read_byte(p->val);
-        error_buffer[1] = pgm_read_byte(p->val + 1);
-        break;
-      }
-      p++;
-    }
-  }
-
-  /* possibly the host wants to read more bytes than error_buffer size */
-  /* we ignore this knowing that we return nonsense in this case       */
-  buffers[ERRORBUFFER_IDX].data     = error_buffer;
-  buffers[ERRORBUFFER_IDX].position = 0;
-  buffers[ERRORBUFFER_IDX].lastused = command_buffer[5]-1;
-}
-
-/* --- M-W --- */
-/* helper function for copying to capture buffer, needed twice */
-static void capture_fl_data(uint16_t address, uint8_t length) {
-  uint8_t dataofs = capture_address - address;
-  uint8_t bytes   = min(capture_remain, length - dataofs);
-
-  memcpy(capture_buffer->data + capture_offset,
-         command_buffer + 6 + dataofs,
-         bytes);
-
-  capture_offset  += bytes;
-  capture_address += bytes;
-  capture_remain  -= bytes;
-
-  /* everything done, clear pointer to disable */
-  if (capture_remain == 0)
-    capture_buffer = NULL;
-}
-
-
-static void handle_memwrite(void) {
-  uint16_t address;
-  uint8_t  i, length;
-
-  if (command_length < 6)
-    return;
-
-  address = command_buffer[3] + (command_buffer[4]<<8);
-  length  = command_buffer[5];
-
-  if (address == 119) {
-    /* Change device address, 1541 style */
-    device_address = command_buffer[6] & 0x1f;
-    display_address(device_address);
-    return;
-  }
-
-  if (address == 0x1c06 || address == 0x1c07 || address == 0x1802) {
-    /* Ignored addresses:                                          */
-    /* - VIA 2 timer (1c06, 1c07), determines IRQ frequency        */
-    /* - VIA 1 DDRB, written by N0SD0S to fix Action Replay issues */
-    return;
-  }
-
-  previous_loader = FL_NONE;
-
-  for (i=0;i<command_buffer[5];i++) {
-    datacrc = crc16_update(datacrc, command_buffer[i+6]);
-
-#ifdef CONFIG_LOADER_GIJOE
-    /* Identical code, but lots of different upload variations */
-    if (datacrc == 0x38a2 && command_buffer[i+6] == 0x60)
-      detected_loader = FL_GI_JOE;
-#endif
-  }
-
-  /* Figure out the fastloader based on the current CRC */
-  const struct fastloader_crc_s *crcptr = fl_crc_table;
-  uint8_t loader;
-
-  while ( (loader = pgm_read_byte(&crcptr->loadertype)) != FL_NONE ) {
-    if (datacrc == pgm_read_word(&crcptr->crc))
-      break;
-
-    crcptr++;
-  }
-
-  /* Set RX/TX function pointers */
-  if (loader != FL_NONE) {
-    detected_loader = loader;
-
-#ifdef CONFIG_HAVE_IEC
-    uint8_t index;
-
-    index = pgm_read_word(&crcptr->rxtx);
-
-    if (index != RXTX_NONE) {
-      fast_get_byte  = (fastloader_rx_t)pgm_read_word(&(fl_rxtx_table[index].rxfunc));
-      fast_send_byte = (fastloader_tx_t)pgm_read_word(&(fl_rxtx_table[index].txfunc));
-    }
-#endif
-  }
-
-  /* partially capture uploaded data */
-  if (capture_buffer != NULL)
-    capture_fl_data(address, length);
-
-  /* check for partial capture start in this block */
-  if (loader != FL_NONE && capture_buffer == NULL) {
-    const struct fastloader_capture_s *capptr = fl_capture_table;
-    uint8_t ltype;
-
-    do {
-      ltype = pgm_read_byte(&capptr->loadertype);
-      if (ltype == loader) {
-        capture_address = pgm_read_word(&capptr->startaddr);
-        capture_remain  = pgm_read_byte(&capptr->length) + 1;
-        capture_offset  = 0;
-
-        capture_buffer  = alloc_system_buffer();
-        if (!capture_buffer)
-          break;
-
-        stick_buffer(capture_buffer);
-        capture_buffer->secondary = pgm_read_byte(&capptr->buffer_id);
-
-        break;
-      }
-      capptr++;
-    } while (ltype != FL_NONE);
-
-    /* capture data from this block */
-    if (ltype != FL_NONE)
-      capture_fl_data(address, length);
-  }
-
-#ifdef CONFIG_CAPTURE_LOADERS
-  dump_command();
-#endif
-
-  if (detected_loader == FL_NONE) {
-    uart_puts_P(PSTR("M-W CRC result: "));
-    uart_puthex(datacrc >> 8);
-    uart_puthex(datacrc & 0xff);
-    uart_putcrlf();
-  }
-}
-
 /* --- M subparser --- */
 static void parse_memory(void) {
-  if (command_buffer[2] == 'W')
-    handle_memwrite();
-  else if (command_buffer[2] == 'E')
-    handle_memexec();
-  else if (command_buffer[2] == 'R')
-    handle_memread();
-  else
-    set_error(ERROR_SYNTAX_UNKNOWN);
+  set_error(ERROR_SYNTAX_UNKNOWN);
 }
 
 /* --------- */
@@ -1463,67 +901,7 @@ static void parse_position(void) {
 /*  R - Rename  */
 /* ------------ */
 static void parse_rename(void) {
-  path_t oldpath,newpath;
-  uint8_t *oldname,*newname;
-  cbmdirent_t dent;
-  int8_t res;
-
-  clean_cmdbuffer();
-
-  /* Find the boundary between the names */
-  oldname = ustrchr(command_buffer,'=');
-  if (oldname == NULL) {
-    set_error(ERROR_SYNTAX_UNKNOWN);
-    return;
-  }
-  *oldname++ = 0;
-
-  /* Parse both names */
-  if (parse_path(command_buffer+1, &newpath, &newname, 0))
-    return;
-
-  if (parse_path(oldname, &oldpath, &oldname, 0))
-    return;
-
-  /* Rename can't move files across directories */
-  if (memcmp(&oldpath.dir, &newpath.dir, sizeof(newpath.dir))) {
-    set_error(ERROR_FILE_NOT_FOUND);
-    return;
-  }
-
-  /* Check for invalid characters in the new name */
-  if (check_invalid_name(newname)) {
-    /* This isn't correct for all cases, but for most. */
-    set_error(ERROR_SYNTAX_UNKNOWN);
-    return;
-  }
-
-  /* Don't allow an empty new name */
-  /* The 1541 renames the file to "=" in this case, but I consider that a bug. */
-  if (ustrlen(newname) == 0) {
-    set_error(ERROR_SYNTAX_NONAME);
-    return;
-  }
-
-  /* Check if the new name already exists */
-  res = first_match(&newpath, newname, FLAG_HIDDEN, &dent);
-  if (res == 0) {
-    set_error(ERROR_FILE_EXISTS);
-    return;
-  }
-
-  if (res > 0)
-    /* first_match generated an error other than File Not Found, abort */
-    return;
-
-  /* Clear the FNF */
   set_error(ERROR_OK);
-
-  /* Check if the old name exists */
-  if (first_match(&oldpath, oldname, FLAG_HIDDEN, &dent))
-    return;
-
-  rename(&oldpath, &dent, newname);
 }
 
 
@@ -1531,46 +909,7 @@ static void parse_rename(void) {
 /*  S - Scratch  */
 /* ------------- */
 static void parse_scratch(void) {
-  cbmdirent_t dent;
-  int8_t  res;
-  uint8_t count,cnt;
-  uint8_t *filename,*tmp,*name;
-  path_t  path;
-
-  clean_cmdbuffer();
-
-  filename = ustr1tok(command_buffer+1,',',&tmp);
-
-  set_dirty_led(1);
-  count = 0;
-  /* Loop over all file names */
-  while (filename != NULL) {
-    parse_path(filename, &path, &name, 0);
-
-    if (opendir(&matchdh, &path))
-      return;
-
-    while (1) {
-      res = next_match(&matchdh, name, NULL, NULL, FLAG_HIDDEN, &dent);
-      if (res < 0)
-        break;
-      if (res > 0)
-        return;
-
-      /* Skip directories */
-      if ((dent.typeflags & TYPE_MASK) == TYPE_DIR)
-        continue;
-      cnt = file_delete(&path, &dent);
-      if (cnt != 255)
-        count += cnt;
-      else
-        return;
-    }
-
-    filename = ustr1tok(NULL,',',&tmp);
-  }
-
-  set_error_ts(ERROR_SCRATCHED,count,0);
+  set_error_ts(ERROR_SCRATCHED,0,0);
 }
 
 
@@ -2117,15 +1456,6 @@ void parse_doscommand(void) {
   case 'B':
     /* Block-Something */
     parse_block();
-    break;
-
-  case 'C':
-    /* Copy or Change Partition */
-    if (command_buffer[1] == 'P' || command_buffer[1] == 0xd0)
-      parse_changepart();
-    else
-      /* Copy a file */
-      parse_copy();
     break;
 
   case 'D':

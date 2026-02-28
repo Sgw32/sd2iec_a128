@@ -29,7 +29,7 @@
 /  writing functions, f_write, f_sync, f_unlink, f_mkdir, f_chmod, f_rename,
 /  f_truncate and useless f_getfree. */
 
-#define _FS_MINIMIZE    0
+#define _FS_MINIMIZE    1
 /* The _FS_MINIMIZE option defines minimization level to remove some functions.
 /  0: Full function.
 /  1: f_stat, f_getfree, f_unlink, f_mkdir, f_chmod, f_truncate and f_rename are removed.
@@ -47,7 +47,7 @@
 /* When _USE_MKFS is set to 1 and _FS_READONLY is set to 0, f_mkfs function is
 /  enabled. */
 
-#define _MULTI_PARTITION    1
+#define _MULTI_PARTITION    0
 /* When _MULTI_PARTITION is set to 0, each logical drive is bound to the same
 /  physical drive number and can mount only 1st primary partition.
 /
@@ -57,7 +57,7 @@
 
 #define _PARTITION_MASK     4
 
-#define _USE_FSINFO 1
+#define _USE_FSINFO 0
 /* To enable FSInfo support on FAT32 volume, set _USE_FSINFO to 1. */
 
 #define _USE_SJIS   0
@@ -72,7 +72,7 @@
 
 #define _USE_CURR_DIR 1
 
-#define _USE_LFN 1
+#define _USE_LFN 0
 
 /* Maximum number of characters to return for a LFN */
 /* The buffer used for FILINFO.lfn must be at least */
@@ -326,14 +326,8 @@ char* fgets (char*, int, FIL*);                     /* Get a string from the fil
 #endif
 
 /* User defined function to give a current time to fatfs module */
-
-#ifdef HAVE_RTC
-DWORD get_fattime (void); /* 31-25: Year(0-127 org.1980), 24-21: Month(1-12), 20-16: Day(1-31) */
-                            /* 15-11: Hour(0-23), 10-5: Minute(0-59), 4-0: Second(0-29 *2) */
-#else
 /* Fixed time: 1982-08-31 0:00:00, same month as the introduction of the C64 */
-#  define get_fattime() 0x51f0000
-#endif
+#define get_fattime() 0x51f0000
 
 /* File access control and file status flags (FIL.flag) */
 

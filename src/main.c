@@ -39,7 +39,7 @@
 #include "i2c.h"
 #include "led.h"
 #include "time.h"
-#include "rtc.h"
+// #include "rtc.h"
 #include "spi.h"
 #include "system.h"
 #include "timer.h"
@@ -83,16 +83,11 @@ int main(void) {
   /* Anything that does something which needs the system clock */
   /* should be placed after system_init_late() */
   bus_init();    // needs delay
-  rtc_init();    // accesses I2C
   disk_init();   // accesses card
   read_configuration();
 
   filesystem_init(0);
   change_init();
-
-  uart_puts_P(PSTR("\r\nsd2iec " VERSION " #"));
-  uart_puthex(device_address);
-  uart_putcrlf();
 
 #ifdef CONFIG_REMOTE_DISPLAY
   /* at this point all buffers should be free, */

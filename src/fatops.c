@@ -86,56 +86,6 @@ void parse_error(FRESULT res, uint8_t readflag) {
     set_error_ts(ERROR_FILE_NOT_FOUND,res,0);
     break;
 
-  case FR_NO_PATH:
-  case FR_NOT_DIRECTORY:
-    set_error_ts(ERROR_FILE_NOT_FOUND_39,res,0);
-    break;
-
-  case FR_INVALID_NAME:
-    set_error_ts(ERROR_SYNTAX_JOKER,res,0);
-    break;
-
-  case FR_NOT_READY:
-  case FR_INVALID_DRIVE:
-  case FR_NOT_ENABLED:
-  case FR_NO_FILESYSTEM:
-    set_error_ts(ERROR_DRIVE_NOT_READY,res,0);
-    break;
-
-  case FR_RW_ERROR:
-    /* Just a random READ ERROR */
-    if (readflag)
-      set_error_ts(ERROR_READ_NOHEADER,res,0);
-    else
-      set_error_ts(ERROR_WRITE_VERIFY,res,0);
-    break;
-
-  case FR_WRITE_PROTECTED:
-    set_error_ts(ERROR_WRITE_PROTECT,res,0);
-    break;
-
-  case FR_EXIST:
-    set_error_ts(ERROR_FILE_EXISTS,res,0);
-    break;
-
-  case FR_DIR_NOT_EMPTY:
-    // FIXME: What do the CMD drives return when removing a non-empty directory?
-    set_error_ts(ERROR_FILE_EXISTS,res,0);
-    break;
-
-  case FR_DENIED:
-    set_error_ts(ERROR_DISK_FULL,res,0);
-    break;
-
-  case FR_IS_READONLY:
-  case FR_IS_DIRECTORY:
-    set_error_ts(ERROR_FILE_EXISTS,res,0);
-    break;
-
-  case FR_INVALID_OBJECT:
-    set_error_ts(ERROR_DRIVE_NOT_READY,res,0);
-    break;
-
   default:
     set_error_ts(ERROR_SYNTAX_UNABLE,res,99);
     break;
@@ -364,7 +314,6 @@ static uint8_t fat_file_read(buffer_t *buf) {
   FRESULT res;
   UINT bytesread;
 
-  uart_putc('#');
 
   buf->fptr = buf->pvt.fat.fh.fptr - buf->pvt.fat.headersize;
 
@@ -408,7 +357,6 @@ static uint8_t write_data(buffer_t *buf) {
   FRESULT res;
   UINT byteswritten;
 
-  uart_putc('/');
 
   if(!buf->mustflush)
     buf->lastused = buf->position - 1;
@@ -421,7 +369,6 @@ static uint8_t write_data(buffer_t *buf) {
 
   res = f_write(&buf->pvt.fat.fh, buf->data+2, buf->lastused-1, &byteswritten);
   if (res != FR_OK) {
-    uart_putc('r');
     parse_error(res,1);
     f_close(&buf->pvt.fat.fh);
     free_buffer(buf);
@@ -429,7 +376,6 @@ static uint8_t write_data(buffer_t *buf) {
   }
 
   if (byteswritten != buf->lastused-1U) {
-    uart_putc('l');
     set_error(ERROR_DISK_FULL);
     f_close(&buf->pvt.fat.fh);
     free_buffer(buf);
@@ -499,7 +445,6 @@ static uint8_t fat_file_write(buffer_t *buf) {
     }
     res = f_lseek(&buf->pvt.fat.fh, buf->pvt.fat.fh.fsize);
     if (res != FR_OK) {
-      uart_putc('r');
       parse_error(res,1);
       f_close(&buf->pvt.fat.fh);
       free_buffer(buf);
@@ -841,7 +786,7 @@ int8_t fat_readdir(dh_t *dh, cbmdirent_t *dent) {
   uint8_t *ptr,*nameptr;
   uint8_t typechar;
 
-  finfo.lfn = ops_scratch;
+  //finfo.lfn = ops_scratch;
 
   do {
     res = f_readdir(&dh->dir.fat, &finfo);
@@ -866,13 +811,13 @@ int8_t fat_readdir(dh_t *dh, cbmdirent_t *dent) {
   /* Copy name */
   ustrcpy(dent->pvt.fat.realname, finfo.fname);
 
-  if (!finfo.lfn[0] || ustrlen(finfo.lfn) > CBM_NAME_LENGTH+4) {
+  // if (!finfo.lfn[0] || ustrlen(finfo.lfn) > CBM_NAME_LENGTH+4) {
     nameptr = finfo.fname;
-  } else {
-    /* Convert only LFNs to PETSCII, 8.3 are always upper-case */
-    nameptr = finfo.lfn;
-    asc2pet(nameptr);
-  }
+  // } else {
+  //   /* Convert only LFNs to PETSCII, 8.3 are always upper-case */
+  //   nameptr = finfo.lfn;
+  //   asc2pet(nameptr);
+  // }
 
   /* File type */
   if (finfo.fattrib & AM_DIR) {
@@ -1008,29 +953,7 @@ int8_t fat_readdir(dh_t *dh, cbmdirent_t *dent) {
  * 0 if not found, 1 if deleted or 255 if an error occured.
  */
 uint8_t fat_delete(path_t *path, cbmdirent_t *dent) {
-  FRESULT res;
-  uint8_t *name;
-
-  set_dirty_led(1);
-  if (dent->pvt.fat.realname[0]) {
-    name = dent->pvt.fat.realname;
-    p00cache_invalidate();
-  } else {
-    name = dent->name;
-    pet2asc(name);
-  }
-  partition[path->part].fatfs.curr_dir = path->dir.fat;
-  res = f_unlink(&partition[path->part].fatfs, name);
-
-  update_leds();
-
-  parse_error(res,0);
-  if (res == FR_OK)
-    return 1;
-  else if (res == FR_NO_FILE)
-    return 0;
-  else
-    return 255;
+  return 0;
 }
 
 /**
@@ -1114,12 +1037,7 @@ uint8_t fat_chdir(path_t *path, cbmdirent_t *dent) {
 
 /* Create a new directory */
 void fat_mkdir(path_t *path, uint8_t *dirname) {
-  FRESULT res;
-
-  partition[path->part].fatfs.curr_dir = path->dir.fat;
-  pet2asc(dirname);
-  res = f_mkdir(&partition[path->part].fatfs, dirname);
-  parse_error(res,0);
+  
 }
 
 /**
@@ -1136,7 +1054,7 @@ static uint8_t fat_getvolumename(uint8_t part, uint8_t *label) {
   FRESULT res;
   uint8_t i,j;
 
-  finfo.lfn = NULL;
+  //finfo.lfn = NULL;
   memset(label, 0, CBM_NAME_LENGTH+1);
 
   res = l_opendir(&partition[part].fatfs, 0, &dh);
@@ -1181,7 +1099,7 @@ uint8_t fat_getdirlabel(path_t *path, uint8_t *label) {
   FRESULT res;
   uint8_t *name = ops_scratch;
 
-  finfo.lfn = ops_scratch;
+  //finfo.lfn = ops_scratch;
   memset(label, ' ', CBM_NAME_LENGTH);
 
   res = l_opendir(&partition[path->part].fatfs, path->dir.fat, &dh);
@@ -1257,16 +1175,7 @@ uint8_t fat_getid(path_t *path, uint8_t *id) {
 
 /* Returns the number of free blocks */
 uint16_t fat_freeblocks(uint8_t part) {
-  FATFS *fs = &partition[part].fatfs;
-  DWORD clusters;
-
-  if (l_getfree(fs, NULLSTRING, &clusters, 65535) == FR_OK) {
-    if (clusters > 65535)
-      return 65535;
-    else
-      return clusters;
-  } else
-    return 0;
+  return 65535;
 }
 
 
@@ -1362,65 +1271,9 @@ void fat_write_sector(buffer_t *buf, uint8_t part, uint8_t track, uint8_t sector
  * path to newname.
  */
 void fat_rename(path_t *path, cbmdirent_t *dent, uint8_t *newname) {
-  uint8_t *ext;
-  FRESULT res;
-  UINT byteswritten;
-
-  partition[path->part].fatfs.curr_dir = path->dir.fat;
-
-  if (dent->opstype == OPSTYPE_FAT_X00) {
-    /* [PSUR]00 rename, just change the internal file name */
-    p00cache_invalidate();
-
-    res = f_open(&partition[path->part].fatfs, &partition[path->part].imagehandle,
-                 dent->pvt.fat.realname, FA_WRITE|FA_OPEN_EXISTING);
-    if (res != FR_OK) {
-      parse_error(res,0);
-      return;
-    }
-
-    res = f_lseek(&partition[path->part].imagehandle, P00_CBMNAME_OFFSET);
-    if (res != FR_OK) {
-      parse_error(res,0);
-      return;
-    }
-
-    /* Copy the new name into dent->name so we can overwrite all 16 bytes */
-    memset(dent->name, 0, CBM_NAME_LENGTH);
-    ustrcpy(dent->name, newname);
-
-    res = f_write(&partition[path->part].imagehandle, dent->name, CBM_NAME_LENGTH, &byteswritten);
-    if (res != FR_OK || byteswritten != CBM_NAME_LENGTH) {
-      parse_error(res,0);
-      return;
-    }
-
-    res = f_close(&partition[path->part].imagehandle);
-    if (res != FR_OK) {
-      parse_error(res,0);
-      return;
-    }
-  } else {
-    switch (check_extension(dent->pvt.fat.realname, &ext)) {
-    case EXT_IS_TYPE:
-      /* Keep type extension */
-      ustrcpy(ops_scratch, newname);
-      build_name(ops_scratch, dent->typeflags & TYPE_MASK);
-      res = f_rename(&partition[path->part].fatfs, dent->pvt.fat.realname, ops_scratch);
-      if (res != FR_OK)
-        parse_error(res, 0);
-      break;
-
-    default:
-      /* Normal rename */
-      pet2asc(dent->name);
-      pet2asc(newname);
-      res = f_rename(&partition[path->part].fatfs, dent->name, newname);
-      if (res != FR_OK)
-        parse_error(res, 0);
-      break;
-    }
-  }
+  (void)path;
+  (void)dent;
+  (void)newname;
 }
 
 /**

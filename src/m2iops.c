@@ -334,7 +334,7 @@ static void m2i_open_write(path_t *path, cbmdirent_t *dent, uint8_t type, buffer
     do {
       FILINFO finfo;
 
-      finfo.lfn = NULL;
+      //finfo.lfn = NULL;
       /* See if it's already there */
       res = f_stat(&partition[path->part].fatfs, ops_scratch + M2I_FATNAME_OFFSET, &finfo);
       if (res == FR_OK) {

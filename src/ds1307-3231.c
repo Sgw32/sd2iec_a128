@@ -36,7 +36,7 @@
 #include "ustring.h"
 #include "utils.h"
 #include "time.h"
-#include "rtc.h"
+// #include "rtc.h"
 #include "ds1307-3231.h"
 
 #define RTC_ADDR 0xd0
@@ -128,10 +128,8 @@ void dsrtc_init(void) {
 
   rtc_state = RTC_NOT_FOUND;
 
-  uart_puts_P(PSTR("DSrtc "));
   tmp = i2c_read_register(RTC_ADDR, 0);
   if (tmp < 0) {
-    uart_puts_P(PSTR("not found"));
     goto fail;
   }
 
@@ -143,14 +141,12 @@ void dsrtc_init(void) {
   if (tmp == 0x55) {
     /* "register" is writeable (actually RAM), RTC is DS1307 */
     dsrtc_type = RTC_1307;
-    uart_puts_P(PSTR("1307 "));
 
     tmp = i2c_read_register(RTC_ADDR, REG_SECOND);
 
   } else {
     /* register is read-only, RTC is DS3231 */
     dsrtc_type = RTC_3231;
-    uart_puts_P(PSTR("3231 "));
 
     tmp = i2c_read_register(RTC_ADDR, REG_CTLSTATUS);
   }

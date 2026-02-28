@@ -28,7 +28,7 @@
 #include "display.h"
 #include "led.h"
 #include "time.h"
-#include "rtc.h"
+// #include "rtc.h"
 #include "softrtc.h"
 #include "timer.h"
 

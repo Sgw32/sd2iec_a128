@@ -132,11 +132,6 @@ void load_dreamload(UNUSED_PARAMETER) {
 
     set_busy_led(1);
 
-    /* Output the track/sector for debugging purposes */
-    uart_puthex(fl_track);
-    uart_putc('/');
-    uart_puthex(fl_sector);
-    uart_putcrlf();
 
     if (fl_track == 0) {
       // check special commands first

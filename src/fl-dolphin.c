@@ -71,7 +71,6 @@ static int16_t _dolphin_getc(void) {
     delay_us(57);
     set_data(1);
 
-    uart_putc('E');
     iec_data.iecflags |= EOI_RECVD;
 
     /* wait until CLOCK is low - A849 */
